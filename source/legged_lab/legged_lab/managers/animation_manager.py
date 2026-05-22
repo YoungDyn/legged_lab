@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 import torch
-from collections.abc import Sequence
 from prettytable import PrettyTable
 from typing import TYPE_CHECKING
+from collections.abc import Sequence
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation
 from isaaclab.managers import ManagerBase, ManagerTermBase
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-
 from .animation_manager_cfg import AnimationTermCfg
 from .motion_data_manager import MotionDataTerm
 
 if TYPE_CHECKING:
     from legged_lab.envs import ManagerBasedAnimationEnv
-
 
 class AnimationTerm(ManagerTermBase):
     cfg: AnimationTermCfg
@@ -62,19 +60,16 @@ class AnimationTerm(ManagerTermBase):
         self._fetch_motion_data()
 
         if self.cfg.enable_visualization:
-            self.vis_root_offset = torch.tensor(
-                self.cfg.vis_root_offset, device=env.device, dtype=torch.float32
-            ).unsqueeze(
-                0
-            )  # (1, 3)
+            self.vis_root_offset = torch.tensor(self.cfg.vis_root_offset, device=env.device, dtype=torch.float32).unsqueeze(0)  # (1, 3)
 
             marker_cfg = VisualizationMarkersCfg(
                 prim_path="/Visuals/KeyBodyVisualizerFromTerm",
                 markers={
                     "red_sphere": sim_utils.SphereCfg(
-                        radius=0.03, visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
+                        radius=0.03,
+                        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
                     ),
-                },
+                }
             )
             self.key_body_marker: VisualizationMarkers = VisualizationMarkers(marker_cfg)
 
@@ -90,33 +85,23 @@ class AnimationTerm(ManagerTermBase):
         if self.cfg.random_initialize:
             # random start time
             if self.cfg.num_steps_to_use > 0:
-                self.motion_fetch_time[env_ids, 0] = self.motion_data_term.sample_times(
-                    self.motion_ids[env_ids], truncate_time_end=truncate_time
-                )
+                self.motion_fetch_time[env_ids, 0] = self.motion_data_term.sample_times(self.motion_ids[env_ids], truncate_time_end=truncate_time)
             else:
-                self.motion_fetch_time[env_ids, 0] = self.motion_data_term.sample_times(
-                    self.motion_ids[env_ids], truncate_time_start=truncate_time
-                )
+                self.motion_fetch_time[env_ids, 0] = self.motion_data_term.sample_times(self.motion_ids[env_ids], truncate_time_start=truncate_time)
         else:
             # start from beginning
             self.motion_fetch_time[env_ids, 0] = 0.0
         if self.num_steps > 1:
-            self.motion_fetch_time[env_ids, 1:] = (
-                self.motion_fetch_time[env_ids, 0:1] + self.step_indices[1:].float() * self._env.step_dt
-            )
+            self.motion_fetch_time[env_ids, 1:] = self.motion_fetch_time[env_ids, 0:1] + self.step_indices[1:].float() * self._env.step_dt
 
         self._fetch_motion_data(env_ids)
 
     def update(self, dt: float):
         if self.cfg.random_fetch:
             if self.cfg.num_steps_to_use > 0:
-                self.motion_fetch_time[:, 0] = self.motion_data_term.sample_times(
-                    self.motion_ids, truncate_time_end=self.num_steps * dt
-                )
+                self.motion_fetch_time[:, 0] = self.motion_data_term.sample_times(self.motion_ids, truncate_time_end=self.num_steps * dt)
             else:
-                self.motion_fetch_time[:, 0] = self.motion_data_term.sample_times(
-                    self.motion_ids, truncate_time_start=self.num_steps * dt
-                )
+                self.motion_fetch_time[:, 0] = self.motion_data_term.sample_times(self.motion_ids, truncate_time_start=self.num_steps * dt)
 
             if self.num_steps > 1:
                 self.motion_fetch_time[:, 1:] = self.motion_fetch_time[:, 0:1] + self.step_indices[1:].float() * dt
@@ -125,7 +110,7 @@ class AnimationTerm(ManagerTermBase):
 
         # Advance time
         if not self.cfg.random_fetch:
-            self.motion_fetch_time += dt  # only effective when random_fetch is False
+            self.motion_fetch_time += dt # only effective when random_fetch is False
 
         if self.cfg.enable_visualization:
             self._visualize()
@@ -145,7 +130,8 @@ class AnimationTerm(ManagerTermBase):
 
         # Fetch motion data
         motion_data_dict = self.motion_data_term.get_motion_state(
-            motion_ids=motion_ids_flat, motion_times=motion_times_flat
+            motion_ids=motion_ids_flat,
+            motion_times=motion_times_flat
         )
 
         # Reshape and store in buffers
@@ -165,20 +151,13 @@ class AnimationTerm(ManagerTermBase):
             return
 
         # check if some necessary buffers are available
-        if (
-            not hasattr(self, "root_pos_w_buffer")
-            or not hasattr(self, "root_quat_buffer")
-            or not hasattr(self, "dof_pos_buffer")
-        ):
-            print(
-                "[WARNING] AnimationTerm visualization: 'root_pos_w_buffer' or 'root_quat_buffer' or 'dof_pos_buffer'"
-                " not found."
-            )
+        if not hasattr(self, "root_pos_w_buffer") or not hasattr(self, "root_quat_buffer") or not hasattr(self, "dof_pos_buffer"):
+            print("[WARNING] AnimationTerm visualization: 'root_pos_w_buffer' or 'root_quat_buffer' or 'dof_pos_buffer' not found.")
             return
 
         root_pos_w = self.root_pos_w_buffer[:, 0, :]  # (num_envs, 3)
-        root_quat = self.root_quat_buffer[:, 0, :]  # (num_envs, 4)
-        dof_pos = self.dof_pos_buffer[:, 0, :]  # (num_envs, num_dofs)
+        root_quat = self.root_quat_buffer[:, 0, :]    # (num_envs, 4)
+        dof_pos = self.dof_pos_buffer[:, 0, :]        # (num_envs, num_dofs)
 
         root_states = robot_anim.data.default_root_state.clone()
         root_states[:, :3] = root_pos_w + self._env.scene.env_origins[:, :3] + self.vis_root_offset
@@ -195,9 +174,12 @@ class AnimationTerm(ManagerTermBase):
         key_body_pos_b = self.key_body_pos_b_buffer[:, 0, :, :]  # (num_envs, num_key_bodies, 3)
         num_key_bodies = key_body_pos_b.shape[1]
         key_body_pos_w = root_states[:, :3].unsqueeze(1) + math_utils.quat_apply(
-            root_quat.unsqueeze(1).expand(-1, num_key_bodies, -1), key_body_pos_b
+            root_quat.unsqueeze(1).expand(-1, num_key_bodies, -1),
+            key_body_pos_b
         )
-        self.key_body_marker.visualize(translations=key_body_pos_w.reshape(-1, 3))
+        self.key_body_marker.visualize(
+            translations=key_body_pos_w.reshape(-1, 3)
+        )
 
     # Some helper functions
     def get_root_pos_w(self, env_ids: Sequence[int] = None) -> torch.Tensor:
@@ -251,6 +233,7 @@ class AnimationTerm(ManagerTermBase):
 
 
 class AnimationManager(ManagerBase):
+
     def __init__(self, cfg: object, env: ManagerBasedAnimationEnv):
         if cfg is None:
             raise ValueError("AnimationManager configuration is required.")
@@ -264,28 +247,19 @@ class AnimationManager(ManagerBase):
         """Returns: A string representation for animation data manager."""
         msg = f"<AnimationManager> contains {len(self._terms)} active terms.\n"
 
-        # create table for term information
+        # create table for term infomation
         table = PrettyTable()
         table.title = "Animation Manager Terms"
-        table.field_names = [
-            "Index",
-            "Term Name",
-            "Motion Data Term",
-            "Num Steps to Use",
-            "Random Init",
-            "Random Fetch",
-        ]
+        table.field_names = ["Index", "Term Name", "Motion Data Term", "Num Steps to Use", "Random Init", "Random Fetch"]
         for index, (term_name, term_cfg) in enumerate(self._term_cfgs.items()):
-            table.add_row(
-                [
-                    index,
-                    term_name,
-                    term_cfg.motion_data_term,
-                    term_cfg.num_steps_to_use,
-                    term_cfg.random_initialize,
-                    term_cfg.random_fetch,
-                ]
-            )
+            table.add_row([
+                index,
+                term_name,
+                term_cfg.motion_data_term,
+                term_cfg.num_steps_to_use,
+                term_cfg.random_initialize,
+                term_cfg.random_fetch
+            ])
         msg += table.get_string()
         msg += "\n"
 

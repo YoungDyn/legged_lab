@@ -1,15 +1,26 @@
 import math
+from dataclasses import MISSING
 
+import isaaclab.sim as sim_utils
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-import legged_lab.tasks.locomotion.velocity.mdp as mdp
-from legged_lab.assets.unitree import UNITREE_GO2_CFG
 from legged_lab.tasks.locomotion.velocity.velocity_env_cfg import LocomotionVelocityEnvCfg
+from legged_lab.assets.unitree import UNITREE_GO2_CFG
+import legged_lab.tasks.locomotion.velocity.mdp as mdp
 
 
 @configclass
@@ -117,7 +128,6 @@ class Go2RewardsCfg:
         },
     )
 
-
 @configclass
 class Go2FlatEnvCfg(LocomotionVelocityEnvCfg):
     observations: Go2ObservationsCfg = Go2ObservationsCfg()
@@ -144,6 +154,7 @@ class Go2FlatEnvCfg(LocomotionVelocityEnvCfg):
         # -----------------------------------------------------------------------------
         # Observation
         # -----------------------------------------------------------------------------
+
 
         # -----------------------------------------------------------------------------
         # Events

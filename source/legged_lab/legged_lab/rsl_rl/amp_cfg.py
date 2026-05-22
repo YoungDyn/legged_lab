@@ -1,12 +1,12 @@
 from dataclasses import MISSING
 from typing import Literal
-
 from isaaclab.utils import configclass
 
 
 @configclass
 class RslRlAmpCfg:
-    """Configuration class for the AMP (Adversarial Motion Priors) in the training"""
+    """Configuration class for the AMP (Adversarial Motion Priors) in the training
+    """
 
     disc_obs_buffer_size: int = 1000
     """Size of the replay buffer for storing discriminator observations"""

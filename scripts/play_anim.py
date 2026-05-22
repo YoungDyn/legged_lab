@@ -22,7 +22,6 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import torch
-
 from isaaclab.assets import Articulation
 
 from legged_lab.envs import ManagerBasedAnimationEnv
@@ -46,6 +45,7 @@ def main():
     robot_anim: Articulation = env.scene["robot_anim"]
     num_dofs = len(robot_anim.data.joint_names)
 
+
     env.reset()
 
     while simulation_app.is_running():
@@ -54,7 +54,6 @@ def main():
             env.step(action)
 
     env.close()
-
 
 if __name__ == "__main__":
     main()

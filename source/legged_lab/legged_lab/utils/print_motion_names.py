@@ -1,8 +1,7 @@
-import argparse
+import joblib
 import os
 
-import joblib
-
+import argparse
 parser = argparse.ArgumentParser(description="Print motion names from a motion file.")
 parser.add_argument(
     "--robot",

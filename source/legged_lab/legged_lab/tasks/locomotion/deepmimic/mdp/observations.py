@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 import torch
-from dataclasses import MISSING
 from typing import TYPE_CHECKING
-
+from dataclasses import MISSING
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation
+import isaaclab.utils.string as string_utils
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers.manager_base import ManagerTermBase
+from isaaclab.managers.manager_term_cfg import ObservationTermCfg
+from isaaclab.sensors import Camera, Imu, RayCaster, RayCasterCamera, TiledCamera
 
 if TYPE_CHECKING:
-    from isaaclab.envs import ManagerBasedEnv
-
+    from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
     from legged_lab.envs import ManagerBasedAnimationEnv
     from legged_lab.managers import AnimationTerm
 
 
-def root_rot_tan_norm(env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+def root_rot_tan_norm(
+    env: ManagerBasedEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
     robot: Articulation = env.scene[asset_cfg.name]
 
     root_quat = robot.data.root_quat_w
@@ -33,18 +37,19 @@ def key_body_pos_b(
     env: ManagerBasedEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=MISSING, preserve_order=True),
 ) -> torch.Tensor:
+
     robot: Articulation = env.scene[asset_cfg.name]
 
     key_body_pos_w = robot.data.body_pos_w[:, asset_cfg.body_ids, :]  # shape: (num_envs, M, 3)
-    root_pos_w = robot.data.root_pos_w  # shape: (num_envs, 3).
-    root_quat = robot.data.root_quat_w  # shape: (num_envs, 4), w, x, y, z order.
+    root_pos_w = robot.data.root_pos_w      # shape: (num_envs, 3).
+    root_quat = robot.data.root_quat_w    # shape: (num_envs, 4), w, x, y, z order.
 
     num_key_bodies = key_body_pos_w.shape[1]
     num_envs = root_pos_w.shape[0]
 
     key_body_pos_b = math_utils.quat_apply_inverse(
         root_quat.unsqueeze(1).expand(-1, num_key_bodies, -1),
-        key_body_pos_w - root_pos_w.unsqueeze(1).expand(-1, num_key_bodies, -1),
+        key_body_pos_w - root_pos_w.unsqueeze(1).expand(-1, num_key_bodies, -1)
     )
 
     return key_body_pos_b.reshape(num_envs, -1)
@@ -54,7 +59,7 @@ def ref_root_pos_error(
     env: ManagerBasedAnimationEnv,
     animation: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    abs_height: bool = True,
+    abs_height: bool = True
 ) -> torch.Tensor:
     """Compute the difference between robot root position and reference motion root position.
 
@@ -101,6 +106,7 @@ def ref_root_rot_tan_norm(
     animation: str,
     flatten_steps_dim: bool = True,
 ) -> torch.Tensor:
+
     animation_term: AnimationTerm = env.animation_manager.get_term(animation)
 
     ref_root_quat = animation_term.get_root_quat()  # shape: (num_envs, num_steps, 4)
@@ -120,12 +126,15 @@ def ref_root_ang_vel_b(
     animation: str,
     flatten_steps_dim: bool = True,
 ) -> torch.Tensor:
+
     animation_term: AnimationTerm = env.animation_manager.get_term(animation)
     num_envs = env.num_envs
 
     ref_root_ang_vel_w = animation_term.get_root_ang_vel_w()  # shape: (num_envs, num_steps, 3)
     ref_root_quat = animation_term.get_root_quat()  # shape: (num_envs, num_steps, 4)
-    ref_root_ang_vel = math_utils.quat_apply_inverse(ref_root_quat, ref_root_ang_vel_w)
+    ref_root_ang_vel = math_utils.quat_apply_inverse(
+        ref_root_quat, ref_root_ang_vel_w
+    )
 
     if flatten_steps_dim:
         return ref_root_ang_vel.reshape(num_envs, -1)
@@ -138,6 +147,7 @@ def ref_joint_pos(
     animation: str,
     flatten_steps_dim: bool = True,
 ) -> torch.Tensor:
+
     animation_term: AnimationTerm = env.animation_manager.get_term(animation)
 
     ref_dof_pos = animation_term.get_dof_pos()  # shape: (num_envs, num_steps, num_dofs)
@@ -147,12 +157,12 @@ def ref_joint_pos(
     else:
         return ref_dof_pos
 
-
 def ref_joint_vel(
     env: ManagerBasedAnimationEnv,
     animation: str,
     flatten_steps_dim: bool = True,
 ) -> torch.Tensor:
+
     animation_term: AnimationTerm = env.animation_manager.get_term(animation)
 
     ref_dof_vel = animation_term.get_dof_vel()  # shape: (num_envs, num_steps, num_dofs)
@@ -162,12 +172,12 @@ def ref_joint_vel(
     else:
         return ref_dof_vel
 
-
 def ref_key_body_pos_b(
     env: ManagerBasedAnimationEnv,
     animation: str,
     flatten_steps_dim: bool = True,
 ) -> torch.Tensor:
+
     animation_term: AnimationTerm = env.animation_manager.get_term(animation)
 
     ref_key_body_pos_b = animation_term.get_key_body_pos_b()  # shape: (num_envs, num_steps, num_key_bodies, 3)

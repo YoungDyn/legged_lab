@@ -1,22 +1,24 @@
 from __future__ import annotations
 
-import enum
 import os
+import numpy as np
+import enum
+import joblib
 import torch
 from prettytable import PrettyTable
 from typing import TYPE_CHECKING
 
-import joblib
-
 import isaaclab.utils.math as math_utils
-from isaaclab.managers import ManagerBase, ManagerTermBase
+import isaaclab.utils.string as string_utils
+from isaaclab.assets import Articulation
 
+from isaaclab.managers import ManagerBase, ManagerTermBase
 from .motion_data_term_cfg import MotionDataTermCfg
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
 
-from legged_lab.utils.math import ang_vel_from_quat_diff, quat_slerp, vel_forward_diff
+from legged_lab.utils.math import vel_forward_diff, ang_vel_from_quat_diff, quat_slerp, linear_interpolate, calc_frame_blend
 
 
 class LoopMode(enum.Enum):
@@ -25,19 +27,21 @@ class LoopMode(enum.Enum):
 
 
 class MotionDataTerm(ManagerTermBase):
+
     cfg: MotionDataTermCfg
     _env: ManagerBasedEnv
 
     def __init__(self, cfg: MotionDataTermCfg, env: ManagerBasedEnv):
         super().__init__(cfg, env)
 
-        assert os.path.exists(cfg.motion_data_dir), f"Motion data directory {cfg.motion_data_dir} does not exist."
+        assert os.path.exists(cfg.motion_data_dir), \
+            f"Motion data directory {cfg.motion_data_dir} does not exist."
 
         self._load_motion_data()
 
     def _load_motion_data(self):
         # list the motion data files in the directory
-        motion_files = [f for f in os.listdir(self.cfg.motion_data_dir) if f.endswith(".pkl")]
+        motion_files = [f for f in os.listdir(self.cfg.motion_data_dir) if f.endswith('.pkl')]
         if not motion_files:
             raise ValueError(f"No motion data files with .pkl extension found in {self.cfg.motion_data_dir}.")
 
@@ -63,10 +67,7 @@ class MotionDataTerm(ManagerTermBase):
             # check if the motion file name is valid
             motion_file = f"{motion_name}.pkl"
             if motion_file not in motion_files:
-                raise ValueError(
-                    f"Motion name {motion_name} defined in motion weights not found in motion data directory"
-                    f" {self.cfg.motion_data_dir}. Available files: {motion_files}"
-                )
+                raise ValueError(f"Motion name {motion_name} defined in motion weights not found in motion data directory {self.cfg.motion_data_dir}. Available files: {motion_files}")
 
             # load the motion data file
             motion_path = os.path.join(self.cfg.motion_data_dir, motion_file)
@@ -137,7 +138,7 @@ class MotionDataTerm(ManagerTermBase):
         self.motion_weights = torch.tensor(self.motion_weights, dtype=torch.float32, device=self.device)
         self.motion_weights = self.motion_weights / torch.sum(self.motion_weights)
 
-        # Some other information
+        # Some other infomation
         self.num_dofs = self.dof_pos[0].shape[1]
         self.num_key_bodies = self.key_body_pos_w[0].shape[1]
 
@@ -203,9 +204,7 @@ class MotionDataTerm(ManagerTermBase):
         motion_ids = torch.multinomial(self.motion_weights, num_samples=n, replacement=True)
         return motion_ids
 
-    def sample_times(
-        self, motion_ids: torch.Tensor, truncate_time_start: float = None, truncate_time_end: float = None
-    ):
+    def sample_times(self, motion_ids: torch.Tensor, truncate_time_start: float = None, truncate_time_end: float = None):
         """Sample time within the duration of the given motions.
 
         Args:
@@ -225,15 +224,11 @@ class MotionDataTerm(ManagerTermBase):
         time_end = motion_durations.clone()
 
         if truncate_time_start is not None:
-            assert (
-                truncate_time_start >= 0
-            ), f"[MotionLoader] truncate_time_start must be non-negative, but got {truncate_time_start}."
+            assert truncate_time_start >= 0, f"[MotionLoader] truncate_time_start must be non-negative, but got {truncate_time_start}."
             time_start = torch.clamp(time_start + truncate_time_start, min=0.0, max=motion_durations)
 
         if truncate_time_end is not None:
-            assert (
-                truncate_time_end >= 0
-            ), f"[MotionLoader] truncate_time_end must be non-negative, but got {truncate_time_end}."
+            assert truncate_time_end >= 0, f"[MotionLoader] truncate_time_end must be non-negative, but got {truncate_time_end}."
             time_end = torch.clamp(time_end - truncate_time_end, min=0.0)
 
         # Check if valid range exists
@@ -256,6 +251,7 @@ class MotionDataTerm(ManagerTermBase):
 
     def _calc_frame_blend(self, motion_ids: torch.Tensor, times: torch.Tensor):
         num_frames = self.motion_num_frames[motion_ids]
+        dt = self.motion_dt[motion_ids]
         motion_start_indices = self.motion_start_indices[motion_ids]
 
         phase = self.calc_motion_phase(motion_ids, times)
@@ -268,6 +264,7 @@ class MotionDataTerm(ManagerTermBase):
         frame_idx1 = frame_idx1 + motion_start_indices
 
         return frame_idx0, frame_idx1, blend
+
 
     # def _allocate_temp_tensors(self, n):
     #     """Allocate temporary tensors for motion state computation."""
@@ -295,6 +292,7 @@ class MotionDataTerm(ManagerTermBase):
     #             key_body_pos_w_0, key_body_pos_w_1)
 
     def get_motion_state(self, motion_ids: torch.Tensor, motion_times: torch.Tensor) -> dict[str, torch.Tensor]:
+
         frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_ids, motion_times)
 
         root_pos_w_0 = self.root_pos_w[frame_idx0]
@@ -326,7 +324,8 @@ class MotionDataTerm(ManagerTermBase):
         dof_vel = torch.lerp(dof_vel_0, dof_vel_1, blend)
         key_body_pos_w = torch.lerp(key_body_pos_w_0, key_body_pos_w_1, blend.unsqueeze(1))
         key_body_pos_b = math_utils.quat_apply_inverse(
-            root_quat.unsqueeze(1).expand(-1, self.num_key_bodies, -1), key_body_pos_w - root_pos_w.unsqueeze(1)
+            root_quat.unsqueeze(1).expand(-1, self.num_key_bodies, -1),
+            key_body_pos_w - root_pos_w.unsqueeze(1)
         )
 
         return {
@@ -427,7 +426,7 @@ class MotionDataManager(ManagerBase):
 def calc_phase(times: torch.Tensor, motion_duration: torch.Tensor, loop_mode: torch.Tensor) -> torch.Tensor:
     phase = times / motion_duration
 
-    loop_wrap_mask = loop_mode == int(LoopMode.WRAP.value)
+    loop_wrap_mask = (loop_mode == int(LoopMode.WRAP.value))
     phase_wrap = phase[loop_wrap_mask]
     phase_wrap = phase_wrap - torch.floor(phase_wrap)
     phase[loop_wrap_mask] = phase_wrap

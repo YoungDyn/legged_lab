@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import math
+import re
 import torch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from isaaclab.assets import Articulation
-from isaaclab.managers import SceneEntityCfg
+import isaaclab.sim as sim_utils
+import isaaclab.utils.math as math_utils
+from isaaclab.actuators import ImplicitActuator
+from isaaclab.assets import Articulation, DeformableObject, RigidObject
+from isaaclab.managers import EventTermCfg, ManagerTermBase, SceneEntityCfg
+from isaaclab.terrains import TerrainImporter
+from isaaclab.utils.version import compare_versions
 
 if TYPE_CHECKING:
     from legged_lab.envs import ManagerBasedAnimationEnv
     from legged_lab.managers import AnimationTerm
-
 
 def reset_from_ref(
     env: ManagerBasedAnimationEnv,

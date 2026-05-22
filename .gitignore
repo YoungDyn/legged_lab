@@ -36,9 +36,10 @@ _repo
 _build
 .lastformat
 
-# Temp folders
+# Temp folders and local raw datasets
 **/temp/
 **/tmp/
+raw_data/
 
 # Codex local environment
 .codex/env.local.sh

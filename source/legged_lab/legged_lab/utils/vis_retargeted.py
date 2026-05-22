@@ -3,7 +3,7 @@ import argparse
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Visualization of retargeted data.")
+parser = argparse.ArgumentParser(description="Visulization of retargeted data.")
 parser.add_argument(
     "--robot",
     type=str,
@@ -28,15 +28,16 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import numpy as np
 import os
+import numpy as np
 import torch
+import joblib
 import yaml
 
 import carb
-import isaacsim.core.utils.prims as prim_utils
-import joblib
 import omni
+
+import isaacsim.core.utils.prims as prim_utils
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -77,18 +78,20 @@ def define_markers() -> VisualizationMarkers:
         prim_path="/Visuals/myMarkers",
         markers={
             "red_sphere": sim_utils.SphereCfg(
-                radius=0.03, visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
             ),
             "green_sphere": sim_utils.SphereCfg(
-                radius=0.03, visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0))
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0))
             ),
-        },
+        }
     )
     return VisualizationMarkers(marker_cfg)
 
-
 class RetargetedMotionLoader:
     def __init__(self, robot_name: str, motion_file: str, lab_joint_names: list[str]) -> None:
+
         self.robot_name = robot_name
 
         """Initialize the motion loader."""
@@ -114,8 +117,7 @@ class RetargetedMotionLoader:
         self._get_joint_mapping()
 
         # load the config file
-        with open(self.config_file) as f:
-            self.retargeted_cfg = yaml.safe_load(f)
+        self.retargeted_cfg = yaml.safe_load(open(self.config_file, "r"))
         self.joint_offsets_dict = self.retargeted_cfg["joint_offsets"]
         self.joint_offsets = np.zeros(len(self.lab_joint_names), dtype=np.float32)
         # set the joint offsets
@@ -124,9 +126,7 @@ class RetargetedMotionLoader:
                 idx = self.lab_joint_names.index(joint_name)
                 self.joint_offsets[idx] = np.deg2rad(offset)
             else:
-                raise ValueError(
-                    f"Joint name {joint_name} in joint_offsets not found in lab joint names: {self.lab_joint_names}"
-                )
+                raise ValueError(f"Joint name {joint_name} in joint_offsets not found in lab joint names: {self.lab_joint_names}")
 
         # setup keyboard input
         self.setup_keyboard()
@@ -141,12 +141,8 @@ class RetargetedMotionLoader:
             if joint_name not in self.lab_joint_names:
                 raise ValueError(f"Joint name {joint_name} not found in lab joint names.")
 
-        self.retargeted_to_lab_mapping = [
-            self.retargeted_joint_names.index(joint_name) for joint_name in self.lab_joint_names
-        ]
-        self.lab_to_retargeted_mapping = [
-            self.lab_joint_names.index(joint_name) for joint_name in self.retargeted_joint_names
-        ]
+        self.retargeted_to_lab_mapping = [self.retargeted_joint_names.index(joint_name) for joint_name in self.lab_joint_names]
+        self.lab_to_retargeted_mapping = [self.lab_joint_names.index(joint_name) for joint_name in self.retargeted_joint_names]
 
     def get_motion_data(self, current_frame: int, device):
         """Get the motion data for the current frame.
@@ -155,26 +151,24 @@ class RetargetedMotionLoader:
             current_frame (int): The frame index of the motion data.
         """
         m_data = self.motion_data[self.current_motion_name]
-        root_pos = m_data["root_pos"][current_frame]
-        root_quat = m_data["root_rot"][current_frame][[3, 0, 1, 2]]  # w, x, y, z
-        dof_pos = m_data["dof_pos"][current_frame][self.retargeted_to_lab_mapping]
+        root_pos = m_data['root_pos'][current_frame]
+        root_quat = m_data['root_rot'][current_frame][[3, 0, 1, 2]] # w, x, y, z
+        dof_pos = m_data['dof_pos'][current_frame][self.retargeted_to_lab_mapping]
         # apply joint offsets
         dof_pos += self.joint_offsets
 
-        joint_pos_smpl = m_data["joint_pos_smpl"][current_frame]
-        joint_pos_robot = m_data["joint_pos_robot"][current_frame]
+        joint_pos_smpl = m_data['joint_pos_smpl'][current_frame]
+        joint_pos_robot = m_data['joint_pos_robot'][current_frame]
 
-        return (
-            torch.tensor(root_pos, device=device),
-            torch.tensor(root_quat, device=device),
-            torch.tensor(dof_pos, device=device),
-            torch.tensor(joint_pos_smpl, device=device),
-            torch.tensor(joint_pos_robot, device=device),
-        )
+        return torch.tensor(root_pos, device=device), \
+                torch.tensor(root_quat, device=device), \
+                torch.tensor(dof_pos, device=device), \
+                torch.tensor(joint_pos_smpl, device=device), \
+                torch.tensor(joint_pos_robot, device=device)
 
     def get_motion_length(self):
         """Get the length of the motion data."""
-        return len(self.motion_data[self.current_motion_name]["dof_pos"])
+        return len(self.motion_data[self.current_motion_name]['dof_pos'])
 
     def _next_motion(self):
         """Get the next motion data."""
@@ -209,9 +203,11 @@ class RetargetedMotionLoader:
                 print(f"[INFO]: Switched to previous motion: {self.current_motion_name}")
 
 
-def run_simulator(
-    sim: sim_utils.SimulationContext, robot: Articulation, origin: torch.Tensor, markers: VisualizationMarkers
-) -> None:
+def run_simulator(sim: sim_utils.SimulationContext,
+                  robot: Articulation,
+                  origin: torch.Tensor,
+                  markers: VisualizationMarkers) -> None:
+
     re_motion_loader = RetargetedMotionLoader(args_cli.robot, args_cli.motion_file, robot.data.joint_names)
 
     _, _, _, joint_pos_smpl, joint_pos_robot = re_motion_loader.get_motion_data(0, sim.device)
@@ -219,7 +215,7 @@ def run_simulator(
     # marker_indices = torch.zeros(num_key_points, dtype=torch.int32, device=sim.device)
     num_joint_smpl = joint_pos_smpl.shape[0]
     num_joint_robot = joint_pos_robot.shape[0]
-    marker_indices = torch.zeros(num_joint_smpl + num_joint_robot, dtype=torch.int32, device=sim.device)
+    marker_indices = torch.zeros(num_joint_smpl+num_joint_robot, dtype=torch.int32, device=sim.device)
     marker_indices[num_joint_smpl:] = 1
 
     """Run the simulation loop"""
@@ -230,11 +226,10 @@ def run_simulator(
 
     # Simulate physics
     while simulation_app.is_running():
+
         current_time = int(sim_time / sim_dt) % re_motion_loader.get_motion_length()
         # get the motion data
-        root_pos, root_quat, dof_pos, joint_pos_smpl, joint_pos_robot = re_motion_loader.get_motion_data(
-            current_time, sim.device
-        )
+        root_pos, root_quat, dof_pos, joint_pos_smpl, joint_pos_robot = re_motion_loader.get_motion_data(current_time, sim.device)
         robot_state = robot.data.default_root_state.clone()
         robot_state[:, :3] = origin + root_pos
         robot_state[:, 3:7] = root_quat
@@ -243,7 +238,10 @@ def run_simulator(
         joint_pos[:, :] = dof_pos
         robot.write_joint_position_to_sim(joint_pos)
 
-        markers.visualize(torch.cat([joint_pos_smpl, joint_pos_robot], dim=0), marker_indices=marker_indices)
+        markers.visualize(
+            torch.cat([joint_pos_smpl, joint_pos_robot], dim=0),
+            marker_indices=marker_indices
+        )
 
         # only render, no physics
         sim.render()
@@ -252,7 +250,6 @@ def run_simulator(
         count += 1
         # update buffers
         robot.update(sim_dt)
-
 
 def main():
     """Main function."""

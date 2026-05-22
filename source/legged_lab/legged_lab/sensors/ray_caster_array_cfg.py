@@ -1,12 +1,12 @@
 import torch
 
-from isaaclab.sensors import RayCasterCfg
 from isaaclab.utils import configclass
-
+from isaaclab.sensors import RayCasterCfg
 
 @configclass
 class RayCasterArrayCfg(RayCasterCfg):
-    shape: tuple[int, int] = (-1, -1)
+
+    shape : tuple[int, int] = (-1, -1)
 
     def __post_init__(self):
         resolution = self.pattern_cfg.resolution

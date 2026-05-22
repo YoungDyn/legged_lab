@@ -1,18 +1,32 @@
-import math
 import os
+import math
+from dataclasses import MISSING
 
+import isaaclab.sim as sim_utils
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import legged_lab.tasks.locomotion.amp.mdp as mdp
+from legged_lab.tasks.locomotion.amp.amp_env_cfg import LocomotionAmpEnvCfg
 from legged_lab import LEGGED_LAB_ROOT_DIR
 
 ##
 # Pre-defined configs
 ##
 from legged_lab.assets.unitree import UNITREE_G1_29DOF_CFG
-from legged_lab.tasks.locomotion.amp.amp_env_cfg import LocomotionAmpEnvCfg
 
 # The order must align with the retarget config file scripts/tools/retarget/config/g1_29dof.yaml
 KEY_BODY_NAMES = [
@@ -22,15 +36,13 @@ KEY_BODY_NAMES = [
     "right_wrist_yaw_link",
     "left_shoulder_roll_link",
     "right_shoulder_roll_link",
-]  # if changed here and symmetry is enabled, remember to update amp.mdp.symmetry.g1 as well!
+] # if changed here and symmetry is enabled, remember to update amp.mdp.symmetry.g1 as well!
 ANIMATION_TERM_NAME = "animation"
 AMP_NUM_STEPS = 4
 
-
 @configclass
-class G1AmpRewards:
+class G1AmpRewards():
     """Reward terms for the MDP."""
-
     # -- task
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_exp, weight=1.0, params={"command_name": "base_velocity", "std": math.sqrt(0.25)}
@@ -95,7 +107,7 @@ class G1AmpRewards:
         },
     )
 
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-50.0)
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
 
 
 @configclass
@@ -156,41 +168,58 @@ class G1AmpEnvCfg(LocomotionAmpEnvCfg):
         # -----------------------------------------------------
         # Observations
         # -----------------------------------------------------
-        self.terminal_obs_groups = ("disc",)
 
         # policy observations
 
-        # self.observations.policy.key_body_pos_b.params = {
-        #     "asset_cfg": SceneEntityCfg(name="robot", body_names=KEY_BODY_NAMES, preserve_order=True)
-        # }
+        self.observations.policy.key_body_pos_b.params = {
+            "asset_cfg": SceneEntityCfg(
+                name="robot",
+                body_names=KEY_BODY_NAMES,
+                preserve_order=True
+            )
+        }
 
         # critic observations
 
         self.observations.critic.key_body_pos_b.params = {
-            "asset_cfg": SceneEntityCfg(name="robot", body_names=KEY_BODY_NAMES, preserve_order=True)
+            "asset_cfg": SceneEntityCfg(
+                name="robot",
+                body_names=KEY_BODY_NAMES,
+                preserve_order=True
+            )
         }
 
         # discriminator observations
 
-        # self.observations.disc.key_body_pos_b.params = {
-        #     "asset_cfg": SceneEntityCfg(name="robot", body_names=KEY_BODY_NAMES, preserve_order=True)
-        # }
+        amp_body_cfg = SceneEntityCfg(
+            name="robot",
+            body_names=KEY_BODY_NAMES,
+            preserve_order=True,
+        )
+        self.observations.disc.body_pos_b.params = {
+            "asset_cfg": amp_body_cfg,
+        }
+        self.observations.disc.body_lin_vel_b.params = {
+            "asset_cfg": amp_body_cfg,
+        }
         self.observations.disc.history_length = AMP_NUM_STEPS
 
-        # discriminator demonstration observations
+        # discriminator demostration observations
 
-        # self.observations.disc_demo.ref_root_local_rot_tan_norm.params["animation"] = ANIMATION_TERM_NAME
+        self.observations.disc_demo.ref_root_local_rot_tan_norm.params["animation"] = ANIMATION_TERM_NAME
         self.observations.disc_demo.ref_root_ang_vel_b.params["animation"] = ANIMATION_TERM_NAME
-        self.observations.disc_demo.ref_joint_pos.params["animation"] = ANIMATION_TERM_NAME
-        self.observations.disc_demo.ref_joint_vel.params["animation"] = ANIMATION_TERM_NAME
-        # self.observations.disc_demo.ref_key_body_pos_b.params["animation"] = ANIMATION_TERM_NAME
+        self.observations.disc_demo.ref_body_pos_b.params["animation"] = ANIMATION_TERM_NAME
+        self.observations.disc_demo.ref_body_lin_vel_b.params["animation"] = ANIMATION_TERM_NAME
 
         # ------------------------------------------------------
         # Events
         # ------------------------------------------------------
         self.events.add_base_mass.params["asset_cfg"].body_names = "torso_link"
         self.events.base_external_force_torque.params["asset_cfg"].body_names = ["torso_link"]
-        self.events.reset_from_ref.params = {"animation": ANIMATION_TERM_NAME, "height_offset": 0.1}
+        self.events.reset_from_ref.params = {
+            "animation": ANIMATION_TERM_NAME,
+            "height_offset": 0.1
+        }
 
         # ------------------------------------------------------
         # Rewards
@@ -218,6 +247,7 @@ class G1AmpEnvCfg(LocomotionAmpEnvCfg):
 
 @configclass
 class G1AmpEnvCfg_PLAY(G1AmpEnvCfg):
+
     def __post_init__(self):
         super().__post_init__()
 

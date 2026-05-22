@@ -22,20 +22,24 @@ Output Legged Lab Format:
     - 'dof_pos': Degrees of freedom positions, shape (num_frames, num_dofs)
     - 'loop_mode': Loop mode (int, 0 for clamp, 1 for wrap)
     - 'key_body_pos': Key body positions in world frame, shape (num_frames, num_key_bodies, 3)
+
+
 """
 
-import enum
+
 import numpy as np
 import pickle
+import enum
 import torch
 
+
 import isaaclab.sim as sim_utils
-import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation, ArticulationCfg, AssetBaseCfg
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.utils import configclass
+import isaaclab.utils.math as math_utils
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.assets import Articulation, ArticulationCfg, AssetBaseCfg
+from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 
 
 class LoopMode(enum.Enum):
@@ -51,24 +55,24 @@ def extract_gmr_data(
     start_frame: int = 0,
     end_frame: int = -1,
 ):
-    with open(gmr_file_path, "rb") as f:
+    with open(gmr_file_path, 'rb') as f:
         gmr_data = pickle.load(f)
 
     # Extract data from GMR format
-    fps = gmr_data["fps"]
-    root_pos = gmr_data["root_pos"]  # Shape: (num_frames, 3)
-    root_rot_quat = gmr_data["root_rot"]  # Shape: (num_frames, 4), quaternion format
-    dof_pos = gmr_data["dof_pos"]  # Shape: (num_frames, num_dofs)
+    fps = gmr_data['fps']
+    root_pos = gmr_data['root_pos']  # Shape: (num_frames, 3)
+    root_rot_quat = gmr_data['root_rot']  # Shape: (num_frames, 4), quaternion format
+    dof_pos = gmr_data['dof_pos']    # Shape: (num_frames, num_dofs)
 
     # Log the type and shape of each extracted term
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("📥 LOADED GMR DATA")
-    print("=" * 60)
+    print("="*60)
     print(f"⏱️  FPS:           type={type(fps).__name__}, value={fps}")
     print(f"📍 Root Position: type={type(root_pos).__name__}, shape={root_pos.shape}")
     print(f"🔄 Root Rotation: type={type(root_rot_quat).__name__}, shape={root_rot_quat.shape}")
     print(f"🦴 DOF Position:  type={type(dof_pos).__name__}, shape={dof_pos.shape}")
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
     # Verify shapes
     if root_pos.ndim != 2 or root_pos.shape[1] != 3:
@@ -97,38 +101,39 @@ def extract_gmr_data(
     dof_pos_lab = dof_pos[:, gmr_to_lab_indices]
 
     output_data = {
-        "fps": fps,
-        "root_pos": root_pos[start_frame:end_frame],
-        "root_rot": root_rot_quat[start_frame:end_frame],
-        "dof_pos": dof_pos_lab[start_frame:end_frame],
-        "loop_mode": loop_mode.value,
+        'fps': fps,
+        'root_pos': root_pos[start_frame:end_frame],
+        'root_rot': root_rot_quat[start_frame:end_frame],
+        'dof_pos': dof_pos_lab[start_frame:end_frame],
+        'loop_mode': loop_mode.value,
     }
 
     return output_data
 
-
 def run_simulator(
-    simulation_app,
-    sim: sim_utils.SimulationContext,
-    scene: InteractiveScene,
-    motion_data_dicts: list[dict[str, np.ndarray]],
-    key_body_names: list[str],
-):
+        simulation_app,
+        sim: sim_utils.SimulationContext,
+        scene: InteractiveScene,
+        motion_data_dicts: list[dict[str, np.ndarray]],
+        key_body_names: list[str]):
+
     robot: Articulation = scene["robot"]
     # marker
     marker_cfg: VisualizationMarkersCfg = VisualizationMarkersCfg(
         prim_path="/Visuals/FrameVisualizerFromScript",
         markers={
             "red_sphere": sim_utils.SphereCfg(
-                radius=0.03, visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
+                radius=0.03,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0))
             ),
-        },
+        }
     )
     marker: VisualizationMarkers = VisualizationMarkers(marker_cfg)
 
     # get the motion data
     num_motions = len(motion_data_dicts)
     assert num_motions == scene.num_envs, "Number of motions must match number of environments."
+    fps = motion_data_dicts[0]['fps']
     root_pos_w_list = []
     root_quat_list = []
     dof_pos_list = []
@@ -136,16 +141,16 @@ def run_simulator(
 
     for motion_data in motion_data_dicts:
         # assert motion_data['fps'] == fps, "All motions must have the same fps."
-        root_pos_w_list.append(torch.from_numpy(motion_data["root_pos"]).to(scene.device).float())
+        root_pos_w_list.append(torch.from_numpy(motion_data['root_pos']).to(scene.device).float())
 
-        root_quat_tensor = torch.from_numpy(motion_data["root_rot"]).to(scene.device).float()
-        root_quat_tensor = math_utils.convert_quat(root_quat_tensor, "wxyz")  # convert to w, x, y, z format
+        root_quat_tensor = torch.from_numpy(motion_data['root_rot']).to(scene.device).float()
+        root_quat_tensor = math_utils.convert_quat(root_quat_tensor, "wxyz") # convert to w, x, y, z format
         root_quat_tensor = math_utils.quat_unique(root_quat_tensor)
         root_quat_tensor = math_utils.normalize(root_quat_tensor)
         root_quat_list.append(root_quat_tensor)
 
-        dof_pos_list.append(torch.from_numpy(motion_data["dof_pos"]).to(scene.device).float())
-        num_frames_list.append(motion_data["dof_pos"].shape[0])
+        dof_pos_list.append(torch.from_numpy(motion_data['dof_pos']).to(scene.device).float())
+        num_frames_list.append(motion_data['dof_pos'].shape[0])
 
     max_num_frames = max(num_frames_list)
 
@@ -157,7 +162,8 @@ def run_simulator(
         else:
             raise ValueError(f"Key body name '{name}' not found in Legged Lab body names.")
     key_body_pos_w_list = [
-        torch.zeros((num_frames, len(key_body_indices), 3), device=scene.device) for num_frames in num_frames_list
+        torch.zeros((num_frames, len(key_body_indices), 3), device=scene.device)
+        for num_frames in num_frames_list
     ]
 
     count = 0
@@ -165,6 +171,7 @@ def run_simulator(
     dt = sim.cfg.dt
 
     while simulation_app.is_running():
+
         root_states = robot.data.default_root_state.clone()
         joint_pos = robot.data.default_joint_pos.clone()
         joint_vel = torch.zeros_like(robot.data.default_joint_vel)
@@ -193,13 +200,13 @@ def run_simulator(
         for motion_idx in range(num_motions):
             num_frames = num_frames_list[motion_idx]
             if count < num_frames:
-                key_body_pos_w_tensor = (
-                    robot.data.body_pos_w[motion_idx, key_body_indices, :] - scene.env_origins[motion_idx, :3]
-                )
+                key_body_pos_w_tensor = robot.data.body_pos_w[motion_idx, key_body_indices, :] - scene.env_origins[motion_idx, :3]
                 key_body_pos_w_list[motion_idx][count, :, :] = key_body_pos_w_tensor
 
         vis_key_body_pos_w = robot.data.body_pos_w[:, key_body_indices, :]
-        marker.visualize(translations=vis_key_body_pos_w.reshape(-1, 3))
+        marker.visualize(
+            translations=vis_key_body_pos_w.reshape(-1, 3)
+        )
 
         count += 1
         sim_time += dt
@@ -209,10 +216,10 @@ def run_simulator(
     print(f"[INFO]: Simulation completed in {count} steps, total time: {sim_time:.2f} seconds.")
 
     for motion_data_dict, root_quat in zip(motion_data_dicts, root_quat_list):
-        motion_data_dict["root_rot"] = root_quat.cpu().numpy()
+        motion_data_dict['root_rot'] = root_quat.cpu().numpy()
 
     for motion_data_dict, key_body_pos_w in zip(motion_data_dicts, key_body_pos_w_list):
-        motion_data_dict["key_body_pos"] = key_body_pos_w.cpu().numpy()
+        motion_data_dict['key_body_pos'] = key_body_pos_w.cpu().numpy()
 
     return motion_data_dicts
 

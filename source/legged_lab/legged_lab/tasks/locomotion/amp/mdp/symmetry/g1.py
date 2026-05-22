@@ -1,3 +1,4 @@
+
 """Functions to specify the symmetry in the observation and action space for Unitree G1 29dof."""
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ def compute_symmetric_states(
         # -- original
         obs_aug["policy"][:batch_size] = obs["policy"][:]
         # -- left-right
-        obs_aug["policy"][batch_size : 2 * batch_size] = _transform_policy_obs_left_right(
+        obs_aug["policy"][batch_size:2*batch_size] = _transform_policy_obs_left_right(
             env.unwrapped, obs["policy"][:]
         )
     else:
@@ -88,7 +89,7 @@ def _transform_policy_obs_left_right(env: ManagerBasedRLEnv, obs: torch.Tensor) 
     # copy observation tensor
     obs = obs.clone()
     device = obs.device
-    joint_num = 29  # G1 29dof
+    joint_num = 29 # G1 29dof
     key_body_num = 6
 
     # policy_obs_term_dim = env.observation_manager.group_obs_term_dim["policy"]
@@ -166,6 +167,7 @@ def _transform_actions_left_right(actions: torch.Tensor) -> torch.Tensor:
     return actions
 
 
+
 """
 Lab joint names:
  0 - left_hip_pitch_joint
@@ -198,7 +200,6 @@ Lab joint names:
 27 - left_wrist_yaw_joint
 28 - right_wrist_yaw_joint
 """
-
 
 def _switch_g1_29dof_joints_left_right(joint_data: torch.Tensor) -> torch.Tensor:
     """Applies a left-right symmetry transformation to the joint data tensor."""
@@ -248,12 +249,8 @@ def _switch_g1_29dof_key_body_pos_left_right(key_body_pos: torch.Tensor) -> torc
         right_idx = i * 2 + 1
 
         # Swap left and right key body positions
-        key_body_pos_switched[..., left_idx * 3 : left_idx * 3 + 3] = key_body_pos[
-            ..., right_idx * 3 : right_idx * 3 + 3
-        ]
-        key_body_pos_switched[..., right_idx * 3 : right_idx * 3 + 3] = key_body_pos[
-            ..., left_idx * 3 : left_idx * 3 + 3
-        ]
+        key_body_pos_switched[..., left_idx * 3 : left_idx * 3 + 3] = key_body_pos[..., right_idx * 3 : right_idx * 3 + 3]
+        key_body_pos_switched[..., right_idx * 3 : right_idx * 3 + 3] = key_body_pos[..., left_idx * 3 : left_idx * 3 + 3]
 
         # Flip the y-coordinate to reflect left-right symmetry
         key_body_pos_switched[..., left_idx * 3 + 1] *= -1.0

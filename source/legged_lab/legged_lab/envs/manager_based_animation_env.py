@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import torch
+from typing import Any
 from collections.abc import Sequence
+from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv, VecEnvStepReturn, VecEnvObs
+from isaaclab.managers import ActionManager, ObservationManager, RecorderManager, CommandManager, CurriculumManager, RewardManager, TerminationManager
 
-from isaaclab.envs import ManagerBasedRLEnv, VecEnvStepReturn
-
-from legged_lab.managers import AnimationManager, MotionDataManager
-
+from legged_lab.managers import MotionDataManager, AnimationManager
 from .manager_based_animation_env_cfg import ManagerBasedAnimationEnvCfg
 
-
 class ManagerBasedAnimationEnv(ManagerBasedRLEnv):
+
     cfg: ManagerBasedAnimationEnvCfg
 
     def __init__(self, cfg: ManagerBasedAnimationEnvCfg, render_mode: str | None = None, **kwargs):
@@ -114,8 +114,9 @@ class ManagerBasedAnimationEnv(ManagerBasedRLEnv):
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 
+
     def _reset_idx(self, env_ids: Sequence[int]):
         # -- animation manager
-        self.animation_manager.reset(env_ids)
+        info = self.animation_manager.reset(env_ids)
 
         super()._reset_idx(env_ids)

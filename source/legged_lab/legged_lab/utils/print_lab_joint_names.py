@@ -3,7 +3,7 @@ import argparse
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Visualization of retargeted data.")
+parser = argparse.ArgumentParser(description="Visulization of retargeted data.")
 parser.add_argument(
     "--robot",
     type=str,
@@ -22,6 +22,9 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
+
+import os
+import numpy as np
 
 import isaacsim.core.utils.prims as prim_utils
 

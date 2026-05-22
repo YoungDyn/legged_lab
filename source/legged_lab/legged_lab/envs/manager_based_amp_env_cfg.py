@@ -9,3 +9,6 @@ class ManagerBasedAmpEnvCfg(ManagerBasedAnimationEnvCfg):
 
     terminal_obs_groups: tuple[str, ...] = ("disc",)
     """Observation groups to preview before reset and export through ``extras["terminal_obs"]``."""
+
+    reward_groups: dict[str, list[str]] | None = None
+    """Reward term names grouped by critic name for multi-critic algorithms."""

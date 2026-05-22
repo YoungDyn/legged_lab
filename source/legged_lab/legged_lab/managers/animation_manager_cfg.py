@@ -4,10 +4,9 @@ from dataclasses import MISSING
 
 from isaaclab.utils import configclass
 
-
 @configclass
 class AnimationTermCfg:
-    """Configuration for an animation."""
+    """"Configureation for an animation"""
 
     motion_data_term: str = MISSING
     """The motion data term to use for this animation term."""

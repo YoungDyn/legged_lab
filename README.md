@@ -16,7 +16,7 @@
 - [Installation](#installation)
   - [Prerequisites](#prerequisites)
   - [Setup Steps](#setup-steps)
-  - [Docker Usage (Dockerfile + Bash Scripts)](#docker-usage)
+  - [Docker Usage (Isaac Lab Image)](#docker-usage)
 - [Usage](#usage)
   - [Prepare Motion Data](#prepare-motion-data)
   - [Training & Play](#training-and-play)
@@ -26,12 +26,13 @@
 <a id="overview"></a>
 ## 📖 Overview
 
-This repository is an extension for legged robot reinforcement learning based on Isaac Lab, which allows to develop in an isolated environment, outside of the core Isaac Lab repository. The RL algorithm is based on a [forked RSL-RL library](https://github.com/zitongbai/rsl_rl/tree/feature/amp).
+This repository is a Multi-Critic version of `zitongbai/legged_lab`. It is an extension for legged robot reinforcement learning based on Isaac Lab, and it vendors a customized `rsl_rl/` package in this checkout so Multi-Critic AMP training and play can run from the fork directly.
 
 **Key Features:**
 
 - `DeepMimic` for humanoid robots, including Unitree G1.
 - `AMP` Adversarial Motion Priors (AMP) for humanoid robots, including Unitree G1. We suggest retargeting the human motion data by [GMR](https://github.com/YanjieZe/GMR).
+- `Multi-Critic AMP` tasks for get-up and loco-recovery training.
 
 <a id="demo"></a>
 ## Demo
@@ -43,7 +44,8 @@ https://github.com/user-attachments/assets/ed84a8a3-f349-44ac-9cfd-2baab2265a25
 <a id="news-updates"></a>
 ## 🔥 News & Updates
 
-- 2026/02/09: Add Dockerfile + bash script workflow, including host path requirement for local `rsl_rl`.
+- 2026/05/22: Add Multi-Critic AMP get-up and loco-recovery tasks with vendored `rsl_rl`.
+- 2026/02/09: Add Docker Compose usage guide (official Isaac Lab image workflow).
 - 2025/12/16: Test in Isaac Lab 2.3.1 and RSL-RL 3.2.0.
 - 2025/12/05: Use git lfs to store large files, including motion data and robot models.
 - 2025/11/23: Add Symmetry data augmentation in AMP training.
@@ -71,10 +73,10 @@ https://github.com/user-attachments/assets/ed84a8a3-f349-44ac-9cfd-2baab2265a25
 
     ```bash
     # Option 1: HTTPS
-    git clone https://github.com/zitongbai/legged_lab
+    git clone https://github.com/YoungDyn/legged_lab
 
     # Option 2: SSH
-    git clone git@github.com:zitongbai/legged_lab.git
+    git clone git@github.com:YoungDyn/legged_lab.git
 
     cd legged_lab
     ```
@@ -94,58 +96,35 @@ https://github.com/user-attachments/assets/ed84a8a3-f349-44ac-9cfd-2baab2265a25
     python -m pip install -e source/legged_lab
     ```
 
-4.  **Install RSL-RL (Forked Version)**
-    We use a customized version of `rsl_rl` to support advanced features like AMP.
+4.  **Install Vendored RSL-RL**
+    This fork includes the customized `rsl_rl/` package used by the training and play scripts.
 
     ```bash
-    # Clone outside of IsaacLab and legged_lab directories
-    git clone -b feature/amp https://github.com/zitongbai/rsl_rl.git
-
     cd rsl_rl
     python -m pip install -e .
     ```
 
 <a id="docker-usage"></a>
-### Docker Usage (Dockerfile + Bash Scripts)
+### Docker Usage (Isaac Lab Image)
 
-If you use the provided Docker workflow, the container will mount local source code and install packages automatically at startup.
+If you use the provided Docker Compose workflow, the container will mount local source code and install packages automatically at startup.
 
-#### Host directory requirement for `rsl_rl`
-
-By default, `docker/.env.base` expects `rsl_rl` to be placed next to `legged_lab`:
-
-```text
-.../lab_dev/
-├── legged_lab/
-└── rsl_rl/
-```
-
-If your `rsl_rl` is somewhere else, update `RSL_RL_PATH` in `docker/.env.base`.
-
-By default, Isaac Sim caches, logs, data, and documents use the official Docker directory layout under `~/docker/isaac-sim`.
-
-#### Build image
-
-```bash
-bash docker/build.sh
-```
+The customized `rsl_rl/` package is included in this repository and mounted by the compose workflow.
 
 #### Start container
 
 ```bash
-# xhost +
-bash docker/run.sh
+docker compose -f docker/docker-compose.yaml up -d
 ```
 
 At startup, the container will:
-- overwrite `.vscode/settings.json` with the container's built-in VS Code settings
 - install mounted `rsl_rl` in editable mode (`/workspace/rsl_rl`)
 - install mounted `legged_lab` in editable mode (`/workspace/legged_lab/source/legged_lab`)
 
 #### Enter container
 
 ```bash
-bash docker/enter.sh
+docker compose -f docker/docker-compose.yaml exec legged-lab bash
 ```
 
 Default working directory is `/workspace/legged_lab`.
@@ -153,15 +132,15 @@ Default working directory is `/workspace/legged_lab`.
 #### Stop / remove container
 
 ```bash
-bash docker/stop.sh
+docker compose -f docker/docker-compose.yaml stop
+docker compose -f docker/docker-compose.yaml down
 ```
 
-#### Rebuild image after Dockerfile changes
+#### Recreate container after compose changes
 
 ```bash
-bash docker/stop.sh
-bash docker/build.sh
-bash docker/run.sh
+docker compose -f docker/docker-compose.yaml down
+docker compose -f docker/docker-compose.yaml up -d
 ```
 
 <a id="usage"></a>
@@ -254,6 +233,44 @@ python scripts/rsl_rl/play.py --task LeggedLab-Isaac-AMP-G1-v0 --headless --num_
 ```
 
 The video will be saved in the `logs/rsl_rl/experiment_name/run_name/videos/play` directory.
+
+</details>
+
+#### Multi-Critic AMP
+
+<details>
+<summary>Smoke Train</summary>
+
+Use the Isaac Lab conda environment and run a one-iteration smoke training pass:
+
+```bash
+conda run -n env_isaaclab python scripts/rsl_rl/train.py \
+    --task LeggedLab-Isaac-MultiCritic-AMP-Getup-G1-v0 \
+    --num_envs 2 --max_iterations 1 --headless
+
+conda run -n env_isaaclab python scripts/rsl_rl/train.py \
+    --task LeggedLab-Isaac-MultiCritic-AMP-Loco-Recovery-G1-v0 \
+    --num_envs 2 --max_iterations 1 --headless
+```
+
+</details>
+
+<details>
+<summary>Smoke Play</summary>
+
+Use the `model_0.pt` checkpoint produced by the smoke training run:
+
+```bash
+conda run -n env_isaaclab python scripts/rsl_rl/play.py \
+    --task LeggedLab-Isaac-MultiCritic-AMP-Getup-G1-Play-v0 \
+    --num_envs 1 --headless --video --video_length 5 \
+    --checkpoint logs/rsl_rl/g1_multicritic_amp_get_up/<run_name>/model_0.pt
+
+conda run -n env_isaaclab python scripts/rsl_rl/play.py \
+    --task LeggedLab-Isaac-MultiCritic-AMP-Loco-Recovery-G1-Play-v0 \
+    --num_envs 1 --headless --video --video_length 5 \
+    --checkpoint logs/rsl_rl/g1_multicritic_amp_loco_recovery/<run_name>/model_0.pt
+```
 
 </details>
 

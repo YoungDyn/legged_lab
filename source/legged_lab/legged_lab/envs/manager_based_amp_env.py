@@ -19,7 +19,7 @@ from .manager_based_animation_env import ManagerBasedAnimationEnv
 
 
 class ManagerBasedAmpEnv(ManagerBasedAnimationEnv):
-    """AMP environment with preview-based terminal observation export."""
+    """AMP environment with terminal observation export and optional multi-critic reward grouping."""
 
     cfg: ManagerBasedAmpEnvCfg
 
@@ -32,12 +32,7 @@ class ManagerBasedAmpEnv(ManagerBasedAnimationEnv):
         preview_obs: dict[str, torch.Tensor | dict[str, torch.Tensor]],
         reset_env_ids: torch.Tensor,
     ) -> dict[str, torch.Tensor | dict[str, torch.Tensor]]:
-        """Merge pre-reset previews into post-reset observations for terminated envs.
-
-        The returned structure matches ``current_obs``. For each tensor leaf, rows indexed by
-        ``reset_env_ids`` come from ``preview_obs`` while all other rows remain from ``current_obs``.
-        Nested dictionaries are merged recursively.
-        """
+        """Merge pre-reset previews into post-reset observations for terminated envs."""
         terminal_obs = {}
         for key, value in current_obs.items():
             if key not in preview_obs:
@@ -72,6 +67,31 @@ class ManagerBasedAmpEnv(ManagerBasedAnimationEnv):
 
         return None
 
+    def _compute_reward_groups(self) -> tuple[torch.Tensor, list[str]] | None:
+        """Compute dt-scaled reward groups configured for multi-critic algorithms."""
+        if self.cfg.reward_groups is None:
+            return None
+
+        critic_names = list(self.cfg.reward_groups.keys())
+        reward_groups_tensor = torch.zeros((self.num_envs, len(critic_names)), device=self.device, dtype=torch.float32)
+        term_names = list(self.reward_manager._term_names)
+        term_name_to_index = {term_name: i for i, term_name in enumerate(term_names)}
+
+        # RewardManager.compute(dt=...) returns dt-scaled totals, while _step_reward stores per-term values before dt.
+        step_rewards_with_dt = self.reward_manager._step_reward * self.step_dt
+
+        for critic_index, critic_name in enumerate(critic_names):
+            for term_name in self.cfg.reward_groups[critic_name]:
+                term_index = term_name_to_index.get(term_name)
+                if term_index is None:
+                    raise KeyError(
+                        f"Reward group '{critic_name}' references unknown reward term '{term_name}'."
+                        f" Available terms are: {term_names}"
+                    )
+                reward_groups_tensor[:, critic_index] += step_rewards_with_dt[:, term_index]
+
+        return reward_groups_tensor, critic_names
+
     def load_managers(self):
         """Load AMP-specific managers while swapping in the local preview observation manager."""
         self.motion_data_manager = MotionDataManager(self.cfg.motion_data, self)
@@ -103,18 +123,7 @@ class ManagerBasedAmpEnv(ManagerBasedAnimationEnv):
             self.event_manager.apply(mode="startup")
 
     def step(self, action: torch.Tensor) -> VecEnvStepReturn:
-        """Step the environment and expose terminal observations in ``extras``.
-
-        This follows the parent implementation closely, but captures a non-mutating preview of the
-        observations before reset and merges those values back for terminated environments into
-        ``extras["terminal_obs"]``. The main ``obs`` return value keeps the normal post-reset semantics.
-
-        Args:
-            action: Actions to apply on the environment. Shape is ``(num_envs, action_dim)``.
-
-        Returns:
-            Observations, rewards, terminated flags, timeout flags, and extras.
-        """
+        """Step the environment and expose terminal observations in ``extras``."""
         # process actions
         self.action_manager.process_action(action.to(self.device))
 
@@ -154,6 +163,15 @@ class ManagerBasedAmpEnv(ManagerBasedAnimationEnv):
         self.reset_time_outs = self.termination_manager.time_outs
         # -- reward computation
         self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
+
+        reward_groups = self._compute_reward_groups()
+        if reward_groups is not None:
+            reward_groups_tensor, critic_names = reward_groups
+            self.extras["reward_groups"] = reward_groups_tensor
+            self.extras["reward_group_names"] = critic_names
+        else:
+            self.extras.pop("reward_groups", None)
+            self.extras.pop("reward_group_names", None)
 
         if len(self.recorder_manager.active_terms) > 0:
             # update observations for recording if needed

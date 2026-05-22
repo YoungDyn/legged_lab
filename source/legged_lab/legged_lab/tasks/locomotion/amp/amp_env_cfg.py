@@ -1,8 +1,11 @@
 import math
 from dataclasses import MISSING
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -10,17 +13,21 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
+##
+# Pre-defined configs
+##
+from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+
 import legged_lab.tasks.locomotion.amp.mdp as mdp
 from legged_lab.envs import ManagerBasedAmpEnvCfg
 from legged_lab.managers import AnimationTermCfg as AnimTerm
 from legged_lab.managers import MotionDataTermCfg as MotionDataTerm
-
 
 @configclass
 class AmpSceneCfg(InteractiveSceneCfg):
@@ -93,7 +100,8 @@ class ActionsCfg:
 
 
 @configclass
-class ObservationsCfg:
+class ObservationsCfg():
+
     @configclass
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
@@ -116,11 +124,11 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel, noise=Unoise(n_min=-1.5, n_max=1.5))
         actions = ObsTerm(func=mdp.last_action)
-        # key_body_pos_b = ObsTerm(
-        #     func=mdp.key_body_pos_b,
-        #     params=MISSING,
-        #     noise=Unoise(n_min=-0.08, n_max=0.08),
-        # )
+        key_body_pos_b = ObsTerm(
+            func=mdp.key_body_pos_b,
+            params=MISSING,
+            noise=Unoise(n_min=-0.08, n_max=0.08),
+        )
         # root_height = ObsTerm(func=mdp.base_pos_z)
 
         def __post_init__(self):
@@ -157,14 +165,16 @@ class ObservationsCfg:
 
     @configclass
     class DiscriminatorCfg(ObsGroup):
-        # root_local_rot_tan_norm = ObsTerm(func=mdp.root_local_rot_tan_norm)
+        root_local_rot_tan_norm = ObsTerm(func=mdp.root_local_rot_tan_norm)
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel)
-        joint_pos = ObsTerm(func=mdp.joint_pos)
-        joint_vel = ObsTerm(func=mdp.joint_vel)
-        # key_body_pos_b = ObsTerm(
-        #     func=mdp.key_body_pos_b,
-        #     params=MISSING,
-        # )
+        body_pos_b = ObsTerm(
+            func=mdp.amp_body_pos_b,
+            params=MISSING,
+        )
+        body_lin_vel_b = ObsTerm(
+            func=mdp.amp_body_lin_vel_b,
+            params=MISSING,
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -177,41 +187,34 @@ class ObservationsCfg:
 
     @configclass
     class DiscriminatorDemoCfg(ObsGroup):
-        # ref_root_local_rot_tan_norm = ObsTerm(
-        #     func=mdp.ref_root_local_rot_tan_norm,
-        #     params={
-        #         "animation": MISSING,
-        #         "flatten_steps_dim": False,
-        #     },
-        # )
+        ref_root_local_rot_tan_norm = ObsTerm(
+            func=mdp.ref_root_local_rot_tan_norm,
+            params={
+                "animation": MISSING,
+                "flatten_steps_dim": False,
+            }
+        )
         ref_root_ang_vel_b = ObsTerm(
             func=mdp.ref_root_ang_vel_b,
             params={
                 "animation": MISSING,
                 "flatten_steps_dim": False,
-            },
+            }
         )
-        ref_joint_pos = ObsTerm(
-            func=mdp.ref_joint_pos,
+        ref_body_pos_b = ObsTerm(
+            func=mdp.ref_amp_body_pos_b,
             params={
                 "animation": MISSING,
                 "flatten_steps_dim": False,
-            },
+            }
         )
-        ref_joint_vel = ObsTerm(
-            func=mdp.ref_joint_vel,
+        ref_body_lin_vel_b = ObsTerm(
+            func=mdp.ref_amp_body_lin_vel_b,
             params={
                 "animation": MISSING,
                 "flatten_steps_dim": False,
-            },
+            }
         )
-        # ref_key_body_pos_b = ObsTerm(
-        #     func=mdp.ref_key_body_pos_b,
-        #     params={
-        #         "animation": MISSING,
-        #         "flatten_steps_dim": False,
-        #     },
-        # )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -219,6 +222,7 @@ class ObservationsCfg:
             self.concatenate_dim = -1
 
     disc_demo: DiscriminatorDemoCfg = DiscriminatorDemoCfg()
+
 
 
 @configclass
@@ -259,16 +263,19 @@ class EventCfg:
         },
     )
 
-    reset_from_ref = EventTerm(func=mdp.reset_from_ref, mode="reset", params=MISSING)
-
-    # interval
-    push_robot = EventTerm(
-        func=mdp.push_by_setting_velocity,
-        mode="interval",
-        interval_range_s=(5.0, 5.0),
-        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    reset_from_ref = EventTerm(
+        func=mdp.reset_from_ref,
+        mode="reset",
+        params=MISSING
     )
 
+    # interval
+    # push_robot = EventTerm(
+    #     func=mdp.push_by_setting_velocity,
+    #     mode="interval",
+    #     interval_range_s=(5.0, 5.0),
+    #     params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
+    # )
 
 @configclass
 class RewardsCfg:
@@ -327,24 +334,19 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
-
     pass
-
 
 @configclass
 class MotionDataCfg:
     """Motion data settings for the MDP."""
-
     motion_dataset = MotionDataTerm(
         motion_data_dir="",
         motion_data_weights={},
     )
 
-
 @configclass
 class AnimationCfg:
     """Animation settings for the MDP."""
-
     animation = AnimTerm(
         motion_data_term="motion_dataset",
         motion_data_components=[
@@ -392,7 +394,7 @@ class LocomotionAmpEnvCfg(ManagerBasedAmpEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 20.0
+        self.episode_length_s = 10.0
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation

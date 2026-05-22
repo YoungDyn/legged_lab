@@ -65,12 +65,14 @@ GMR Format:
 
 """
 
+
+
 import argparse
 
 from isaaclab.app import AppLauncher
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Visualization of retargeted data.")
+parser = argparse.ArgumentParser(description="Visulization of retargeted data.")
 parser.add_argument(
     "--robot",
     type=str,
@@ -107,7 +109,10 @@ parser.add_argument(
     nargs=2,
     type=int,
     metavar=("START", "END"),
-    help="frame range: START END (both inclusive). If not provided, all frames will be loaded.",
+    help=(
+        "frame range: START END (both inclusive). If not provided, all frames will be"
+        " loaded."
+    ),
 )
 
 # append AppLauncher cli args
@@ -121,9 +126,14 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import pickle
+import os
 import sys
+import numpy as np
+import pickle
+import argparse
+import enum
 import yaml
+import torch
 from pathlib import Path
 
 import isaaclab.sim as sim_utils
@@ -143,20 +153,26 @@ script_dir = Path(__file__).parent
 sys.path.insert(0, str(script_dir))
 
 try:
-    from gmr_to_lab import LoopMode, ReplayMotionsSceneCfg, extract_gmr_data, run_simulator
+    from gmr_to_lab import (
+        LoopMode,
+        extract_gmr_data,
+        run_simulator,
+        ReplayMotionsSceneCfg,
+    )
 except ImportError as e:
     print(f"Error importing from gmr_to_lab.py: {e}")
     print("Make sure gmr_to_lab.py is in the same directory as this script.")
     raise
 
 
+
 if __name__ == "__main__":
-    with open(args_cli.config_file) as f:
+    with open(args_cli.config_file, 'r') as f:
         config = yaml.safe_load(f)
 
-    gmr_dof_names = config["gmr_dof_names"]
-    lab_dof_names = config["lab_dof_names"]
-    lab_key_body_names = config["lab_key_body_names"]
+    gmr_dof_names = config['gmr_dof_names']
+    lab_dof_names = config['lab_dof_names']
+    lab_key_body_names = config['lab_key_body_names']
 
     loop_mode = LoopMode.CLAMP if args_cli.loop == "clamp" else LoopMode.WRAP
 
@@ -169,12 +185,14 @@ if __name__ == "__main__":
         end_frame=args_cli.frame_range[1] if args_cli.frame_range else -1,
     )
 
-    fps = motion_data_dict["fps"]
+    fps = motion_data_dict['fps']
     dt = 1.0 / fps
 
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(dt=dt, device=args_cli.device))
     scene_cfg = ReplayMotionsSceneCfg(
-        num_envs=1, env_spacing=3.0, robot=ROBOT_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        num_envs=1,
+        env_spacing=3.0,
+        robot=ROBOT_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
     )
     scene = InteractiveScene(scene_cfg)
 
@@ -189,21 +207,19 @@ if __name__ == "__main__":
 
     motion_data_dict = motion_data_dicts[0]
 
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("💾 SAVING CONVERTED DATA")
-    print("=" * 60)
+    print("="*60)
     print(f"📁 Output File: {args_cli.output_file}")
-    print(
-        f"🧮 Number of Frames: {args_cli.frame_range[1] - args_cli.frame_range[0] if args_cli.frame_range else 'All'}"
-    )
+    print(f"🧮 Number of Frames: {args_cli.frame_range[1] - args_cli.frame_range[0] if args_cli.frame_range else 'All'}")
     print(f"🔁 Loop Mode: {loop_mode.name}")
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
-    with open(args_cli.output_file, "wb") as f:
+    with open(args_cli.output_file, 'wb') as f:
         pickle.dump(motion_data_dict, f)
     print("✅ Data saved successfully.")
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
     print("Closing simulation app...")
     simulation_app.close()
-    print("✅ Simulation app closed.")
+    print(f"✅ Simulation app closed.")

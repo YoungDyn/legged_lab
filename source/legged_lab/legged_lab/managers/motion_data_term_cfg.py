@@ -4,7 +4,6 @@ from dataclasses import MISSING
 
 from isaaclab.utils import configclass
 
-
 @configclass
 class MotionDataTermCfg:
     """

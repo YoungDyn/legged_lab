@@ -3,6 +3,8 @@ from dataclasses import MISSING
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
@@ -10,15 +12,20 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 import legged_lab.tasks.locomotion.deepmimic.mdp as mdp
-from legged_lab.envs import ManagerBasedAnimationEnvCfg
+
+
 from legged_lab.managers import AnimationTermCfg as AnimTerm
 from legged_lab.managers import MotionDataTermCfg as MotionDataTerm
+from legged_lab.envs import ManagerBasedAnimationEnvCfg
+
+
 
 ##
 # Scene definition
@@ -97,10 +104,22 @@ class ObservationsCfg:
         )
         root_height = ObsTerm(func=mdp.base_pos_z)
 
-        ref_root_pos_error = ObsTerm(func=mdp.ref_root_pos_error, params=MISSING)
-        ref_root_rot_tan_norm = ObsTerm(func=mdp.ref_root_rot_tan_norm, params=MISSING)
-        ref_joint_pos = ObsTerm(func=mdp.ref_joint_pos, params=MISSING)
-        ref_key_body_pos_b = ObsTerm(func=mdp.ref_key_body_pos_b, params=MISSING)
+        ref_root_pos_error = ObsTerm(
+            func=mdp.ref_root_pos_error,
+            params=MISSING
+        )
+        ref_root_rot_tan_norm = ObsTerm(
+            func=mdp.ref_root_rot_tan_norm,
+            params=MISSING
+        )
+        ref_joint_pos = ObsTerm(
+            func=mdp.ref_joint_pos,
+            params=MISSING
+        )
+        ref_key_body_pos_b = ObsTerm(
+            func=mdp.ref_key_body_pos_b,
+            params=MISSING
+        )
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -146,30 +165,59 @@ class EventCfg:
         },
     )
 
-    reset_from_ref = EventTerm(func=mdp.reset_from_ref, mode="reset", params=MISSING)
+    reset_from_ref = EventTerm(
+        func=mdp.reset_from_ref,
+        mode="reset",
+        params=MISSING
+    )
+
 
 
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    ref_track_root_pos_w_error_exp = RewTerm(func=mdp.ref_track_root_pos_w_error_exp, weight=1.0, params=MISSING)
+    ref_track_root_pos_w_error_exp = RewTerm(
+        func=mdp.ref_track_root_pos_w_error_exp,
+        weight=1.0,
+        params=MISSING
+    )
 
-    ref_track_quat_error_exp = RewTerm(func=mdp.ref_track_quat_error_exp, weight=0.5, params=MISSING)
+    ref_track_quat_error_exp = RewTerm(
+        func=mdp.ref_track_quat_error_exp,
+        weight=0.5,
+        params=MISSING
+    )
 
-    ref_track_root_vel_w_error_exp = RewTerm(func=mdp.ref_track_root_vel_w_error_exp, weight=0.1, params=MISSING)
+    ref_track_root_vel_w_error_exp = RewTerm(
+        func=mdp.ref_track_root_vel_w_error_exp,
+        weight=0.1,
+        params=MISSING
+    )
 
     ref_track_root_ang_vel_w_error_exp = RewTerm(
-        func=mdp.ref_track_root_ang_vel_w_error_exp, weight=0.1, params=MISSING
+        func=mdp.ref_track_root_ang_vel_w_error_exp,
+        weight=0.1,
+        params=MISSING
     )
 
     ref_track_key_body_pos_b_error_exp = RewTerm(
-        func=mdp.ref_track_key_body_pos_b_error_exp, weight=0.3, params=MISSING
+        func=mdp.ref_track_key_body_pos_b_error_exp,
+        weight=0.3,
+        params=MISSING
     )
 
-    ref_track_dof_pos_error_exp = RewTerm(func=mdp.ref_track_dof_pos_error_exp, weight=0.5, params=MISSING)
+    ref_track_dof_pos_error_exp = RewTerm(
+        func=mdp.ref_track_dof_pos_error_exp,
+        weight=0.5,
+        params=MISSING
+    )
 
-    ref_track_dof_vel_error_exp = RewTerm(func=mdp.ref_track_dof_vel_error_exp, weight=0.1, params=MISSING)
+    ref_track_dof_vel_error_exp = RewTerm(
+        func=mdp.ref_track_dof_vel_error_exp,
+        weight=0.1,
+        params=MISSING
+    )
 
     dof_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-1.0e-6)
     dof_acc_l2 = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-8)
@@ -196,28 +244,31 @@ class TerminationsCfg:
     #     func=mdp.motion_data_finish
     # )
 
-    deviation_root_pos_w = DoneTerm(func=mdp.deviation_root_pos_w, params=MISSING)
+    deviation_root_pos_w = DoneTerm(
+        func=mdp.deviation_root_pos_w,
+        params=MISSING
+    )
     # deviation_key_body_pos_b = DoneTerm(
     #     func=mdp.deviation_key_body_pos_b,
     #     params=MISSING
     # )
-    deviation_key_body_pos_w = DoneTerm(func=mdp.deviation_key_body_pos_w, params=MISSING)
+    deviation_key_body_pos_w = DoneTerm(
+        func=mdp.deviation_key_body_pos_w,
+        params=MISSING
+    )
 
 
 @configclass
 class MotionDataCfg:
     """Motion data settings for the MDP."""
-
     motion_dataset = MotionDataTerm(
         motion_data_dir="",
         motion_data_weights={},
     )
 
-
 @configclass
 class AnimationCfg:
     """Animation settings for the MDP."""
-
     animation = AnimTerm(
         motion_data_term="motion_dataset",
         motion_data_components=[
