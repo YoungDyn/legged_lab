@@ -238,6 +238,9 @@ The video will be saved in the `logs/rsl_rl/experiment_name/run_name/videos/play
 
 #### Multi-Critic AMP
 
+The get-up workflow in this Multi-Critic fork was implemented with reference to
+[chaomingsanhua/legged_lab](https://gitee.com/chaomingsanhua/legged_lab) on Gitee.
+
 <details>
 <summary>Smoke Train</summary>
 
@@ -295,3 +298,4 @@ We would like to express our gratitude to the following open-source projects:
 - [**AMP_for_hardware**](https://github.com/Alescontrela/AMP_for_hardware) - Inspiration for AMP implementation.
 - [**GMR**](https://github.com/YanjieZe/GMR) - Excellent motion retargeting library.
 - [**MimicKit**](https://github.com/xbpeng/MimicKit) - Reference for imitation learning.
+- [**chaomingsanhua/legged_lab**](https://gitee.com/chaomingsanhua/legged_lab) - Reference for the get-up workflow in this Multi-Critic fork.
