@@ -18,6 +18,7 @@
   - [Setup Steps](#setup-steps)
   - [Docker Usage (Isaac Lab Image)](#docker-usage)
 - [Usage](#usage)
+  - [Multi-Critic Extension](#multi-critic-extension)
   - [Prepare Motion Data](#prepare-motion-data)
   - [Training & Play](#training-and-play)
 - [Roadmap](#roadmap)
@@ -33,6 +34,26 @@ This repository is a Multi-Critic version of `zitongbai/legged_lab`. It is an ex
 - `DeepMimic` for humanoid robots, including Unitree G1.
 - `AMP` Adversarial Motion Priors (AMP) for humanoid robots, including Unitree G1. We suggest retargeting the human motion data by [GMR](https://github.com/YanjieZe/GMR).
 - `Multi-Critic AMP` tasks for get-up and loco-recovery training.
+
+<a id="multi-critic-extension"></a>
+### Multi-Critic Extension
+
+This fork extends the vendored `rsl_rl/` package with a configurable Multi-Critic PPO/AMP pipeline. Instead of using a single value function, the policy can be trained with `N` independent critic networks, where `N` is set by `num_critics`.
+
+The main components are:
+
+- `MultiCriticActorCritic`: keeps one shared actor and creates `N` independent critic MLPs. The critic output has shape `[batch, num_critics]`.
+- `MultiCriticRolloutStorage`: stores rewards, values, returns, and advantages with an explicit critic dimension.
+- `MultiCriticPPO`: consumes `extras["reward_groups"]` with shape `[num_envs, num_critics]`, computes per-critic returns and advantages, and combines them with `reward_group_weights` for the policy update.
+- `MultiCriticPPOAMP`: adds AMP style reward to a configured reward group, for example the `style` critic in loco-recovery tasks.
+- `MultiCriticAMPRunner`: wires the multi-critic policy, storage, PPO/AMP algorithm, discriminator buffers, training, and play/export path.
+
+Each critic is named by `critic_names`, and each reward group should match one critic. For example, the current G1 tasks use:
+
+- Get-up: `num_critics=2`, `critic_names=["getup", "aux"]`.
+- Loco-recovery: `num_critics=3`, `critic_names=["task", "regularization", "style"]`.
+
+The current implementation supports independent critics (`critic_type="independent"`). This makes it straightforward to separate task progress, regularization, and AMP style rewards while still training one actor policy.
 
 <a id="demo"></a>
 ## Demo
@@ -237,6 +258,8 @@ The video will be saved in the `logs/rsl_rl/experiment_name/run_name/videos/play
 </details>
 
 #### Multi-Critic AMP
+
+This fork adds Multi-Critic AMP tasks that split the reward signal into named reward groups. Each group is learned by its own critic network, and the actor receives the weighted combination of the per-critic advantages. This is useful when different objectives have very different scales or semantics, such as task recovery, regularization, and AMP style imitation.
 
 The get-up workflow in this Multi-Critic fork was implemented with reference to
 [chaomingsanhua/legged_lab](https://gitee.com/chaomingsanhua/legged_lab) on Gitee.
